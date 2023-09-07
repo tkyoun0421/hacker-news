@@ -216,11 +216,11 @@ Object.defineProperty(exports, "__esModule", {
 });
 var View = /** @class */function () {
   function View(containerId, template) {
-    var conatinerElement = document.getElementById(containerId);
-    if (!conatinerElement) {
+    var containerElement = document.getElementById(containerId);
+    if (!containerElement) {
       throw '최상위 컨테이너가 없어 UI를 진행하지 못합니다.';
     }
-    this.container = conatinerElement;
+    this.container = containerElement;
     this.template = template;
     this.renderTemplate = template;
     this.htmlList = [];
@@ -275,13 +275,23 @@ Object.defineProperty(exports, "__esModule", {
 exports.NewsDetailApi = exports.NewsFeedApi = void 0;
 var Api = /** @class */function () {
   function Api(url) {
-    this.ajax = new XMLHttpRequest();
+    this.xhr = new XMLHttpRequest();
     this.url = url;
   }
-  Api.prototype.getRequest = function () {
-    this.ajax.open('GET', this.url, false);
-    this.ajax.send();
-    return JSON.parse(this.ajax.response);
+  Api.prototype.getRequestWithXHR = function (cb) {
+    var _this = this;
+    this.xhr.open('GET', this.url);
+    this.xhr.addEventListener('load', function () {
+      cb(JSON.parse(_this.xhr.response));
+    });
+    this.xhr.send();
+  };
+  Api.prototype.getRequestWithPromise = function (cb) {
+    fetch(this.url).then(function (response) {
+      return response.json();
+    }).then(cb).catch(function () {
+      console.error('데이터를 불러오지 못했습니다.');
+    });
   };
   return Api;
 }();
@@ -291,8 +301,11 @@ var NewsFeedApi = /** @class */function (_super) {
   function NewsFeedApi(url) {
     return _super.call(this, url) || this;
   }
-  NewsFeedApi.prototype.getData = function () {
-    return this.getRequest();
+  NewsFeedApi.prototype.getDataWitchXHR = function (cb) {
+    return this.getRequestWithXHR(cb);
+  };
+  NewsFeedApi.prototype.getDataWitchPromise = function (cb) {
+    return this.getRequestWithPromise(cb);
   };
   return NewsFeedApi;
 }(Api);
@@ -302,8 +315,11 @@ var NewsDetailApi = /** @class */function (_super) {
   function NewsDetailApi(url) {
     return _super.call(this, url) || this;
   }
-  NewsDetailApi.prototype.getData = function () {
-    return this.getRequest();
+  NewsDetailApi.prototype.getDataWithXHR = function (cb) {
+    return this.getRequestWithXHR(cb);
+  };
+  NewsDetailApi.prototype.getDataWithPromise = function (cb) {
+    return this.getRequestWithPromise(cb);
   };
   return NewsDetailApi;
 }(Api);
@@ -358,16 +374,17 @@ var NewsDetailView = /** @class */function (_super) {
     var _this = _super.call(this, containerId, template) || this;
     _this.render = function (id) {
       var api = new api_1.NewsDetailApi(config_1.CONTENT_URL.replace('@id', id));
-      var _a = api.getData(),
-        title = _a.title,
-        content = _a.content,
-        comments = _a.comments;
-      _this.store.makeRead(Number(id));
-      _this.setTemplateData('currentPage', _this.store.currentPage.toString());
-      _this.setTemplateData('title', title);
-      _this.setTemplateData('content', content);
-      _this.setTemplateData('comments', _this.makeComment(comments));
-      _this.updateView();
+      api.getDataWithPromise(function (data) {
+        var title = data.title,
+          content = data.content,
+          comments = data.comments;
+        _this.store.makeRead(Number(id));
+        _this.setTemplateData('currentPage', _this.store.currentPage.toString());
+        _this.setTemplateData('title', title);
+        _this.setTemplateData('content', content);
+        _this.setTemplateData('comments', _this.makeComment(comments));
+        _this.updateView();
+      });
     };
     _this.store = store;
     return _this;
@@ -429,6 +446,15 @@ var NewsFeedView = /** @class */function (_super) {
         page = '1';
       }
       _this.store.currentPage = Number(page);
+      if (!_this.store.hasFeeds) {
+        _this.api.getDataWitchPromise(function (feeds) {
+          _this.store.setFeeds(feeds);
+          _this.renderView();
+        });
+      }
+      _this.renderView();
+    };
+    _this.renderView = function () {
       for (var i = (_this.store.currentPage - 1) * 10; i < _this.store.currentPage * 10; i++) {
         var _a = _this.store.getFeed(i),
           id = _a.id,
@@ -438,7 +464,7 @@ var NewsFeedView = /** @class */function (_super) {
           points = _a.points,
           time_ago = _a.time_ago,
           read = _a.read;
-        _this.addHtml("\n        <div class=\"p-6 ".concat(read ? 'bg-red-500' : 'bg-white', " mt-6 rounded-lg shadow-md transition-colors duration-500 hover:bg-green-100\">\n          <div class=\"flex\">\n            <div class=\"flex-auto\">\n              <a href=\"#/show/").concat(id, "\">").concat(title, "</a>  \n            </div>\n            <div class=\"text-center text-sm\">\n              <div class=\"w-10 text-white bg-green-300 rounded-lg px-0 py-2\">").concat(comments_count, "</div>\n            </div>\n          </div>\n          <div class=\"flex mt-3\">\n            <div class=\"grid grid-cols-3 text-sm text-gray-500\">\n              <div><i class=\"fas fa-user mr-1\"></i>").concat(user, "</div>\n              <div><i class=\"fas fa-heart mr-1\"></i>").concat(points, "</div>\n              <div><i class=\"far fa-clock mr-1\"></i>").concat(time_ago, "</div>\n            </div>  \n          </div>\n        </div>    \n      "));
+        _this.addHtml("\n            <div class=\"p-6 ".concat(read ? 'bg-red-500' : 'bg-white', " mt-6 rounded-lg shadow-md transition-colors duration-500 hover:bg-green-100\">\n                <div class=\"flex\">\n                    <div class=\"flex-auto\">\n                        <a href=\"#/show/").concat(id, "\">").concat(title, "</a>  \n                    </div>\n                    <div class=\"text-center text-sm\">\n                        <div class=\"w-10 text-white bg-green-300 rounded-lg px-0 py-2\">").concat(comments_count, "</div>\n                    </div>\n                </div>\n                <div class=\"flex mt-3\">\n                    <div class=\"grid grid-cols-3 text-sm text-gray-500\">\n                        <div><i class=\"fas fa-user mr-1\"></i>").concat(user, "</div>\n                        <div><i class=\"fas fa-heart mr-1\"></i>").concat(points, "</div>\n                        <div><i class=\"far fa-clock mr-1\"></i>").concat(time_ago, "</div>\n                    </div>  \n                </div>\n            </div>    \n            "));
       }
       _this.setTemplateData('news_feed', _this.getHtml());
       _this.setTemplateData('prev_page', String(_this.store.prevPage));
@@ -447,9 +473,6 @@ var NewsFeedView = /** @class */function (_super) {
     };
     _this.store = store;
     _this.api = new api_1.NewsFeedApi(config_1.NEWS_URL);
-    if (!_this.store.hasFeeds) {
-      _this.store.setFeeds(_this.api.getData());
-    }
     return _this;
   }
   return NewsFeedView;
@@ -611,7 +634,7 @@ var parent = module.bundle.parent;
 if ((!parent || !parent.isParcelRequire) && typeof WebSocket !== 'undefined') {
   var hostname = "" || location.hostname;
   var protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  var ws = new WebSocket(protocol + '://' + hostname + ':' + "2457" + '/');
+  var ws = new WebSocket(protocol + '://' + hostname + ':' + "12836" + '/');
   ws.onmessage = function (event) {
     checkedAssets = {};
     assetsToAccept = [];

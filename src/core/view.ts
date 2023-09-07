@@ -5,13 +5,13 @@ export default abstract class View {
     private htmlList: string[];
 
     constructor(containerId: string, template: string) {
-        const conatinerElement: HTMLElement | null = document.getElementById(containerId);
+        const containerElement: HTMLElement | null = document.getElementById(containerId);
 
-        if (!conatinerElement) {
+        if (!containerElement) {
             throw '최상위 컨테이너가 없어 UI를 진행하지 못합니다.';
         }
 
-        this.container = conatinerElement;
+        this.container = containerElement;
         this.template = template;
         this.renderTemplate = template;
         this.htmlList = [];
